@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Türkçe tarih formatını başlat
+  await initializeDateFormatting('tr_TR', null);
+
+  // Bildirim sistemini başlat
   await NotificationService.instance.initialize();
 
   runApp(const MediTrackAI());

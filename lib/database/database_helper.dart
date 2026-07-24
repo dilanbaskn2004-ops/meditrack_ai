@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         await db.execute("DROP TABLE IF EXISTS medicines");
@@ -30,7 +30,7 @@ class DatabaseHelper {
     );
   }
 
-  Future _createDB(Database db, int version) async {
+  Future<void> _createDB(Database db, int version) async {
     await db.execute('''
       CREATE TABLE medicines(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +41,10 @@ class DatabaseHelper {
         endDate TEXT NOT NULL,
         timesPerDay INTEGER NOT NULL,
         notes TEXT,
-        isActive INTEGER NOT NULL
+        isActive INTEGER NOT NULL,
+
+        taken INTEGER NOT NULL DEFAULT 0,
+        takenDate TEXT
       )
     ''');
   }
@@ -65,6 +68,17 @@ class DatabaseHelper {
     );
   }
 
+  Future<int> updateMedicine(Map<String, dynamic> medicine) async {
+    final db = await database;
+
+    return await db.update(
+      'medicines',
+      medicine,
+      where: 'id = ?',
+      whereArgs: [medicine['id']],
+    );
+  }
+
   Future<int> deleteMedicine(int id) async {
     final db = await database;
 
@@ -75,14 +89,41 @@ class DatabaseHelper {
     );
   }
 
-  Future<int> updateMedicine(Map<String, dynamic> medicine) async {
+  Future<void> markMedicineTaken(int id) async {
     final db = await database;
 
-    return await db.update(
+    await db.update(
       'medicines',
-      medicine,
+      {
+        'taken': 1,
+        'takenDate': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
-      whereArgs: [medicine['id']],
+      whereArgs: [id],
     );
+  }
+
+  Future<void> markMedicineNotTaken(int id) async {
+    final db = await database;
+
+    await db.update(
+      'medicines',
+      {
+        'taken': 0,
+        'takenDate': null,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> getTakenCount() async {
+    final db = await database;
+
+    final result = await db.rawQuery(
+      "SELECT COUNT(*) as total FROM medicines WHERE taken = 1",
+    );
+
+    return Sqflite.firstIntValue(result) ?? 0;
   }
 }

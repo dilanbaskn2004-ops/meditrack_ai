@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/medicine.dart';
+import '../services/notification_service.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   const AddMedicineScreen({super.key});
@@ -21,11 +22,15 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   int timesPerDay = 1;
 
+  bool isSaving = false;
+
   Future<void> pickTime() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
+
+    if (!mounted) return;
 
     if (picked != null) {
       setState(() {
@@ -42,6 +47,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       lastDate: DateTime(2035),
     );
 
+    if (!mounted) return;
+
     if (picked != null) {
       setState(() {
         startDate = picked;
@@ -56,6 +63,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       firstDate: startDate,
       lastDate: DateTime(2035),
     );
+
+    if (!mounted) return;
 
     if (picked != null) {
       setState(() {
@@ -72,6 +81,73 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
     super.dispose();
   }
 
+  Future<void> saveMedicine() async {
+    if (isSaving) return;
+
+    if (nameController.text.isEmpty ||
+        doseController.text.isEmpty ||
+        selectedTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Lütfen zorunlu alanları doldurun."),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final medicine = Medicine(
+        name: nameController.text,
+        dose: doseController.text,
+        time:
+        "${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}",
+        startDate: startDate.toIso8601String(),
+        endDate: endDate.toIso8601String(),
+        timesPerDay: timesPerDay,
+        notes: notesController.text,
+        isActive: true,
+      );
+
+      final medicineId = await DatabaseHelper.instance.insertMedicine(
+        medicine.toMap(),
+      );
+
+      await NotificationService.instance.scheduleDailyMedicineNotification(
+        id: medicineId,
+        medicineName: medicine.name,
+        hour: selectedTime!.hour,
+        minute: selectedTime!.minute,
+      );
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("İlaç başarıyla kaydedildi."),
+        ),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Hata: $e"),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,7 +158,6 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-
             TextField(
               controller: nameController,
               decoration: const InputDecoration(
@@ -90,9 +165,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 15),
-
             TextField(
               controller: doseController,
               decoration: const InputDecoration(
@@ -100,9 +173,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 15),
-
             ListTile(
               title: Text(
                 selectedTime == null
@@ -112,9 +183,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               trailing: const Icon(Icons.access_time),
               onTap: pickTime,
             ),
-
             const SizedBox(height: 15),
-
             ListTile(
               title: Text(
                 "Başlangıç: ${startDate.day}/${startDate.month}/${startDate.year}",
@@ -122,7 +191,6 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               trailing: const Icon(Icons.calendar_today),
               onTap: pickStartDate,
             ),
-
             ListTile(
               title: Text(
                 "Bitiş: ${endDate.day}/${endDate.month}/${endDate.year}",
@@ -130,16 +198,14 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               trailing: const Icon(Icons.calendar_today),
               onTap: pickEndDate,
             ),
-
             const SizedBox(height: 15),
-
             DropdownButtonFormField<int>(
               initialValue: timesPerDay,
               decoration: const InputDecoration(
                 labelText: "Günde Kaç Kez",
                 border: OutlineInputBorder(),
               ),
-              items: [1,2,3,4,5]
+              items: [1, 2, 3, 4, 5]
                   .map(
                     (e) => DropdownMenuItem(
                   value: e,
@@ -148,14 +214,14 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               )
                   .toList(),
               onChanged: (value) {
+                if (value == null) return;
+
                 setState(() {
-                  timesPerDay = value!;
+                  timesPerDay = value;
                 });
               },
             ),
-
             const SizedBox(height: 15),
-
             TextField(
               controller: notesController,
               maxLines: 3,
@@ -164,54 +230,15 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 30),
-
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.isEmpty ||
-                      doseController.text.isEmpty ||
-                      selectedTime == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Lütfen zorunlu alanları doldurun."),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final medicine = Medicine(
-                    name: nameController.text,
-                    dose: doseController.text,
-                    time:
-                    "${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}",
-                    startDate: startDate.toIso8601String(),
-                    endDate: endDate.toIso8601String(),
-                    timesPerDay: timesPerDay,
-                    notes: notesController.text,
-                    isActive: true,
-                  );
-
-                  await DatabaseHelper.instance.insertMedicine(
-                    medicine.toMap(),
-                  );
-
-                  if (!mounted) return;
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("İlaç başarıyla kaydedildi."),
-                    ),
-                  );
-
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  "Kaydet",
-                  style: TextStyle(fontSize: 18),
+                onPressed: isSaving ? null : saveMedicine,
+                child: Text(
+                  isSaving ? "Kaydediliyor..." : "Kaydet",
+                  style: const TextStyle(fontSize: 18),
                 ),
               ),
             ),
